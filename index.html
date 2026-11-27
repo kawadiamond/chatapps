@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>禁止ワードチェッカー</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 16px;
+    background: #f1f4f8;
+    color: #1f2937;
+    font-family: "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif;
+  }
+  .container { max-width: 560px; margin: 0 auto; }
+  h1 { margin: 0 0 24px; font-size: 1.6rem; text-align: center; }
+  .card {
+    margin-bottom: 16px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  label { display: block; margin-bottom: 6px; font-size: 0.9rem; font-weight: bold; }
+  input, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+  }
+  input:focus, textarea:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+  textarea { resize: vertical; }
+  button {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { background: #1d4ed8; }
+  .row { display: flex; gap: 8px; }
+  #register { background: #dc2626; }
+  #register:hover { background: #b91c1c; }
+  #uname { margin-bottom: 14px; }
+  .actions { margin-top: 10px; text-align: right; }
+  #output { height: 300px; overflow: auto; }
+  #output:empty::before { content: "まだメッセージはありません"; color: #94a3b8; }
+  #output p {
+    margin: 0 0 10px;
+    padding: 10px 14px;
+    background: #eff6ff;
+    border-radius: 8px;
+    overflow-wrap: anywhere;
+  }
+</style>
+</head>
+<body>
+
+<!-- コンテンツ表示画面 -->
+
+<div class="container">
+    <h1>禁止ワードチェッカーなぞなぞ</h1>
+
+    <div class="card">
+        <label for="ngword">禁止ワード登録</label>
+        <div>問題:学校長の合言葉
+        </div>
+        <div class="row">
+            <input type="text" id="ngword">
+            <button id="register">登録</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <label for="uname">名前</label>
+        <input type="text" id="uname">
+        <label for="text">メッセージ</label>
+        <textarea id="text" rows="5"></textarea>
+        <div class="actions">
+            <button id="send">送信</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div id="output"></div>
+    </div>
+</div>
+<!--/ コンテンツ表示画面 -->
+
+
+
+<!-- JQuery -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<!-- JQuery -->
+
+
+<!--** 以下Firebase **-->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getDatabase, ref, push, set, onChildAdded, remove, onChildRemoved, onValue, get } 
+  from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+const firebaseConfig = {
+    apiKey: "*********************************",
+    authDomain: "****[ Your Firebase KEY ]****",
+    databaseURL: "****************************",
+    projectId: "**********",
+    storageBucket: "**************************",
+    messagingSenderId: "**********************",
+    appId: "**********************************",
+};
+
+  // Initialize Firebase
+  //initializeAppは関数 31行目でimportしている。 firebaseに接続する関数
+  const app = initializeApp(firebaseConfig);
+
+  // リアルタイムデータベースにアクセスする
+  const db = getDatabase(app);
+  const dbRef = ref(db,"chat");
+  const ngWordRef = ref(db,"ngwords");
+
+  //禁止ワード登録処理
+  $("#register").on("click",function(){
+
+    //ngwordを読み取り
+    const noword = $("#ngword").val();
+    if (noword === "") return; //入力なしの場合は中止
+
+    //配列追加１：Firebase上の現在の配列を読み取り
+    get(ngWordRef).then(function(snapshot){
+      //配列があれば、その配列を使用、なければ、空の配列を用意
+      const ngwords = snapshot.exists() ? snapshot.val() : [];
+
+      //配列追加２　読み取った配列の末尾に新しいワードを追加
+      ngwords.push(noword);
+
+      //配列追加３　同じ場所（"ngword"）に配列ごと保存する
+      set(ngWordRef,ngwords);
+
+      $("#ngword").val("");
+    });
+    });
+
+  // 禁止ワード保存と比較関数
+   //読み取った配列保管場所
+  let ngwordlist = [];
+   //配列読み取り命令
+   onValue(ngWordRef,function(snapshot){
+    if(snapshot.exists()){
+      ngwordlist = snapshot.val();
+      console.log("最新の禁止ワード配列:",ngwordlist);
+    }else{
+      ngwordlist=[]; //1件も登録されていない場合
+    }
+   });
+
+
+    //textの中にngwordlistのいずれかの文言が含まれているか検索
+    function compare (inputtext){
+     const foundword = ngwordlist.find(function (word) {
+      return inputtext.includes(word);
+    });
+    return foundword ; //見つからなければundefinedが返る
+    }
+  
+
+
+
+  //1.送信処理
+  $("#send").on("click",function(){
+    const inputtext = $("#text").val();
+    //送信前に禁止ワード含まれているかチェック
+    const ngword = compare(inputtext);
+    //ngwordに文字が入っていれば(undefinedでなければ)アラートを出して中断
+     if(ngword){
+      alert("禁止ワード："+ ngword+"が含まれています。");
+      return;
+     };
+
+    const msg ={
+        uname: $("#uname").val(),
+        text : inputtext
+    }
+    const newPostRef = push(dbRef); //ユニークキーを自動で作成
+    set(newPostRef,msg);            //登録処理
+  });
+
+  //2.受信処理
+  onChildAdded(dbRef,function(data){
+    const msg = data.val(); //受信DATAをオブジェクト変数として代入
+    const key = data.key;   //ユニークkeyを取得(更新、削除)
+    let h = '<p>';
+        h += msg.uname;
+        h += '<br>';
+        h += msg.text;
+        h += '</p>';
+        $("#output").append(h);
+  });
+
+
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
